@@ -19,6 +19,19 @@ enum ImageType {
   flagged,
 }
 
+final directions = List<Point<int>>.from(
+  [
+    const Point(-1, -1),
+    const Point(0, -1),
+    const Point(1, -1),
+    const Point(-1, 0),
+    const Point(1, 0),
+    const Point(-1, 1),
+    const Point(0, 1),
+    const Point(1, 1)
+  ],
+);
+
 class GameActivity extends StatefulWidget {
   @override
   _GameActivityState createState() => _GameActivityState();
@@ -39,8 +52,8 @@ class _GameActivityState extends State<GameActivity> {
   List<bool> flaggedSquares;
 
   // Probability that a square will be a bomb
-  int bombProbability = 3;
-  int maxProbability = 15;
+  int bombProbability = 20;
+  int maxProbability = 100;
 
   int bombCount = 0;
   int squaresLeft;
@@ -116,25 +129,16 @@ class _GameActivityState extends State<GameActivity> {
                   if (board[rowNumber][columnNumber].hasBomb) {
                     _handleGameOver();
                   }
-                  if (board[rowNumber][columnNumber].bombsAround == 0) {
-                    _handleTap(rowNumber, columnNumber);
-                  } else {
-                    setState(() {
-                      openedSquares[position] = true;
-                      squaresLeft = squaresLeft - 1;
-                    });
-                  }
-
-                  if(squaresLeft <= bombCount) {
+                  _openTile(columnNumber, rowNumber);
+                  if (squaresLeft <= bombCount) {
                     _handleWin();
                   }
-
                 },
                 // Flags square
                 onLongPress: () {
                   if (openedSquares[position] == false) {
                     setState(() {
-                      flaggedSquares[position] = true;
+                      flaggedSquares[position] = !flaggedSquares[position];
                     });
                   }
                 },
@@ -176,117 +180,70 @@ class _GameActivityState extends State<GameActivity> {
 
     // Randomly generate bombs
     Random random = new Random();
-    for (int i = 0; i < rowCount; i++) {
-      for (int j = 0; j < columnCount; j++) {
+    for (int y = 0; y < rowCount; y++) {
+      for (int x = 0; x < columnCount; x++) {
         int randomNumber = random.nextInt(maxProbability);
         if (randomNumber < bombProbability) {
-          board[i][j].hasBomb = true;
+          board[y][x].hasBomb = true;
           bombCount++;
         }
       }
     }
 
     // Check bombs around and assign numbers
-    for (int i = 0; i < rowCount; i++) {
-      for (int j = 0; j < columnCount; j++) {
-        if (i > 0 && j > 0) {
-          if (board[i - 1][j - 1].hasBomb) {
-            board[i][j].bombsAround++;
+    for (int y = 0; y < rowCount; y++) {
+      for (int x = 0; x < columnCount; x++) {
+        for (var dir in directions) {
+          if (_isBomb(x + dir.x, y + dir.y)) {
+            board[y][x].bombsAround++;
           }
         }
-
-        if (i > 0) {
-          if (board[i - 1][j].hasBomb) {
-            board[i][j].bombsAround++;
           }
         }
-
-        if (i > 0 && j < columnCount - 1) {
-          if (board[i - 1][j + 1].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-
-        if (j > 0) {
-          if (board[i][j - 1].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-
-        if (j < columnCount - 1) {
-          if (board[i][j + 1].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-
-        if (i < rowCount - 1 && j > 0) {
-          if (board[i + 1][j - 1].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-
-        if (i < rowCount - 1) {
-          if (board[i + 1][j].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-
-        if (i < rowCount - 1 && j < columnCount - 1) {
-          if (board[i + 1][j + 1].hasBomb) {
-            board[i][j].bombsAround++;
-          }
-        }
-      }
-    }
 
     setState(() {});
-  }
+        }
+
+  bool _isBomb(int x, int y) {
+    if (!_isInsideGrid(x, y)) {
+      return false;
+        }
+    if (board[y][x].hasBomb) {
+      return true;
+          }
+    return false;
+        }
 
   // This function opens other squares around the target square which don't have any bombs around them.
   // We use a recursive function which stops at squares which have a non zero number of bombs around them.
-  void _handleTap(int i, int j) {
-
-    int position = (i * columnCount) + j;
+  void _openTile(int x, int y) {
+    int position = (y * columnCount) + x;
     openedSquares[position] = true;
     squaresLeft = squaresLeft - 1;
 
-    if (i > 0) {
-      if (!board[i - 1][j].hasBomb &&
-          openedSquares[((i - 1) * columnCount) + j] != true) {
-        if (board[i][j].bombsAround == 0) {
-          _handleTap(i - 1, j);
+    if (board[y][x].bombsAround == 0) {
+      for (var dir in directions) {
+        _openTileIfSafe(x + dir.x, y + dir.y);
         }
       }
-    }
-
-    if (j > 0) {
-      if (!board[i][j - 1].hasBomb &&
-          openedSquares[(i * columnCount) + j - 1] != true) {
-        if (board[i][j].bombsAround == 0) {
-          _handleTap(i, j - 1);
-        }
-      }
-    }
-
-    if (j < columnCount - 1) {
-      if (!board[i][j + 1].hasBomb &&
-          openedSquares[(i * columnCount) + j + 1] != true) {
-        if (board[i][j].bombsAround == 0) {
-          _handleTap(i, j + 1);
-        }
-      }
-    }
-
-    if (i < rowCount - 1) {
-      if (!board[i + 1][j].hasBomb &&
-          openedSquares[((i + 1) * columnCount) + j] != true) {
-        if (board[i][j].bombsAround == 0) {
-          _handleTap(i + 1, j);
-        }
-      }
-    }
 
     setState(() {});
+        }
+
+  bool _isInsideGrid(int x, int y) {
+    if (x < 0 || y < 0 || x > columnCount - 1 || y > rowCount - 1) {
+      return false;
+        }
+    return true;
+      }
+
+  void _openTileIfSafe(int x, int y) {
+    if (!_isInsideGrid(x, y)) {
+      return;
+      }
+    if (!board[y][x].hasBomb && openedSquares[(y * columnCount) + x] != true) {
+      _openTile(x, y);
+    }
   }
 
   // Function to handle when a bomb is clicked.
